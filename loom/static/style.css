@@ -1,0 +1,426 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap');
+
+body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Roboto Mono', monospace;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    text-align: center;
+    padding: 1em 0;
+}
+
+.ascii-title {
+    white-space: pre;
+    margin: 0;
+    display: inline-block;
+    text-align: left;
+}
+
+nav a {
+    color: #b0f;
+    margin-left: 1em;
+}
+nav a:first-child {
+    margin-left: 0;
+}
+
+nav a:hover {
+    background-color: #b0f;
+    color: #000;
+}
+
+main {
+    margin: 0 auto;
+    padding: 1em;
+    display: flex;
+    gap: 2em;
+    align-items: flex-start;
+}
+
+#centerPane {
+    flex: 2;
+}
+
+#rightPane {
+    width: 220px;
+    position: sticky;
+    top: 0;
+}
+
+#graphWrapper {
+    position: sticky;
+    top: 0;
+    width: 220px;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#graphScroll {
+    position: relative;
+}
+
+#graphCanvas,
+#nodeOverlay {
+    width: 100%;
+}
+
+#graphCanvas {
+    background-color: #000000;
+}
+
+#nodeOverlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+#leftActions {
+    position: fixed;
+    bottom: 1em;
+    left: 1em;
+    margin-top: 0;
+    z-index: 1000;
+}
+
+.graph-node {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #000000;
+    border: 1px solid #b0f;
+    transform: translate(-6px, -6px);
+    cursor: pointer;
+}
+
+.graph-node.current {
+    background-color: #b0f;
+}
+
+.graph-node.path {
+    box-shadow: 0 0 5px 2px #b0f;
+}
+
+.graph-node:hover {
+    box-shadow: 0 0 5px 2px #b0f;
+}
+
+textarea {
+    width: 100%;
+    background-color: #000;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 0.5em;
+    border-radius: 4px;
+    font-size: 1rem;
+    resize: none;
+    overflow: hidden;
+    caret-color: #b0f;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: 'Roboto Mono', monospace;
+    box-sizing: border-box;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #b0f;
+    box-shadow: 0 0 5px #b0f;
+}
+
+textarea.hide-selected {
+    color: transparent;
+}
+textarea.hide-selected::placeholder {
+    color: transparent;
+}
+
+textarea::placeholder {
+    color: #555;
+}
+
+#textareaContainer {
+    position: relative;
+}
+
+#hoverPreview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0.5em;
+    width: 100%;
+    height: 100%;
+    border: 1px solid transparent;
+    pointer-events: none;
+    white-space: pre-wrap;
+    font-family: 'Roboto Mono', monospace;
+    color: rgba(187, 0, 255, 0.6);
+    text-shadow: 0 0 5px rgba(187, 0, 255, 0.6);
+    border-radius: 4px;
+    display: none;
+    box-sizing: border-box;
+}
+#textMeasure {
+    position: absolute;
+    visibility: hidden;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: auto;
+    overflow: hidden;
+    white-space: pre-wrap;
+    box-sizing: border-box;
+}
+#hoverPreview .hidden-base { visibility: hidden; }
+#hoverPreview .common {
+    color: #fff;
+    opacity: 1;
+    text-shadow: none;
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    margin: 1em 0;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.slider-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.actions {
+    margin-bottom: 1em;
+    display: flex;
+    gap: 0.5em;
+}
+
+input, select {
+    background-color: #111;
+    color: #fff;
+    border: 1px solid #444;
+    padding: 0.25em 0.5em;
+}
+
+#modelSelect {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-color: #111;
+    color: #b0f;
+    border: 1px solid #b0f;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0.25em 1.5em 0.25em 0.5em;
+    background-image: linear-gradient(45deg, transparent 50%, #b0f 50%),
+        linear-gradient(135deg, #b0f 50%, transparent 50%);
+    background-position: calc(100% - 1.2em) 50%, calc(100% - 0.7em) 50%;
+    background-size: 0.4em 0.4em, 0.4em 0.4em;
+    background-repeat: no-repeat;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+#modelSelect:hover {
+    background-color: #b0f;
+    color: #000;
+    border-color: #b0f;
+}
+
+#modelSelect:focus {
+    outline: 1px solid #b0f;
+}
+
+#modelSelect option {
+    color: #fff;
+    background-color: #111;
+}
+
+button {
+    background-color: #111;
+    color: #b0f;
+    border: 1px solid #b0f;
+    padding: 0.25em 0.75em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+#generateBtn {
+    display: none;
+    opacity: 0;
+    transform: translateY(0.5em);
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+#generateBtn.visible {
+    display: inline-block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 5px 2px rgb(174, 0, 255, 0.5); }
+    50% { box-shadow: 0 0 10px 5px rgb(174, 0, 255); }
+    100% { box-shadow: 0 0 5px 2px rgba(174, 0, 255, 0.5); }
+}
+
+.pulsing {
+    animation: pulse 1s infinite;
+}
+
+button:hover {
+    background-color: #b0f;
+    color: #000;
+}
+
+input[type=range] {
+    -webkit-appearance: none;
+    width: 150px;
+    background: transparent;
+    accent-color: #b0f;
+}
+input[type=range]:focus {
+    outline: none;
+}
+input[type=range]::-webkit-slider-runnable-track {
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+}
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #b0f;
+    border: none;
+    border-radius: 50%;
+    margin-top: -5px;
+    cursor: pointer;
+}
+input[type=range]::-moz-range-track {
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+}
+input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #b0f;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+ul.tree { list-style-type: none; padding-left: 0; }
+ul.tree ul { margin-left: 1em; }
+span.node { cursor: pointer; }
+span.selected { color: #b0f; font-weight: bold; }
+ul.tree a {
+    cursor: pointer;
+    color: #fff;
+}
+ul.tree a:hover {
+    background-color: rgba(176, 0, 255, 0.25);
+    color: #fff;
+}
+
+/* History page */
+ul.history-list { list-style: none; padding: 0; }
+.history-main { display: block; }
+ul.history-list li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5em;
+    overflow: hidden;
+    transition: opacity 0.3s ease, height 0.3s ease, margin-bottom 0.3s ease;
+}
+.history-list li.removing {
+    opacity: 0;
+    height: 0 !important;
+    margin-bottom: 0;
+}
+.history-entry {
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+    min-width: 0;
+    padding: 0.25em;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+}
+.history-date {
+    margin-right: 1em;
+    flex-shrink: 0;
+    color: #b0f;
+}
+.history-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-grow: 1;
+    min-width: 0;
+    color: #fff;
+}
+.history-entry:hover {
+    background-color: rgba(176, 0, 255, 0.25);
+}
+.history-entry:hover .history-date,
+.history-entry:hover .history-preview {
+    color: #fff;
+}
+.history-buttons { margin-left: 1em; flex-shrink: 0; }
+.history-buttons button { margin-left: 0.5em; }
+
+a {
+    color: #b0f;
+    text-decoration: none;
+}
+
+a:hover {
+    background-color: #b0f;
+    color: #000;
+}
+
+/* Modal dialog for confirming deletions */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-box {
+    background-color: #111;
+    border: 1px solid #b0f;
+    padding: 1em;
+    color: #fff;
+    max-width: 320px;
+}
+
+.modal-buttons {
+    margin-top: 1em;
+    display: flex;
+    gap: 0.5em;
+    justify-content: flex-end;
+}

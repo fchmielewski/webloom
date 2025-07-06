@@ -1,0 +1,542 @@
+<!doctype html>
+<html>
+<head>
+    <title>WebLoom</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <pre class="ascii-title">
+__        __   _     _
+\ \      / /__| |__ | |    ___   ___  _ __ ___
+ \ \ /\ / / _ \ '_ \| |   / _ \ / _ \| '_ ` _ \
+  \ V  V /  __/ |_) | |__| (_) | (_) | | | | | |
+   \_/\_/ \___|_.__/|_____\___/ \___/|_| |_| |_|
+        </pre>
+        <nav>
+            <a id="newTreeBtn" href="#">New Tree</a>
+            <a id="treeLink" href="{{ url_for('tree_view', tree_id=tree_id, node_id=selected_id) }}">Tree</a>
+            <a id="historyLink" href="{{ url_for('history', current_id=tree_id, node_id=selected_id) }}">History</a>
+        </nav>
+    </header>
+    <main>
+        <div id="graphWrapper">
+            <div id="graphScroll">
+                <canvas id="graphCanvas" width="220" height="400"></canvas>
+                <div id="nodeOverlay"></div>
+            </div>
+            <div class="actions" id="leftActions">
+                <button id="deleteBtn" title="Delete Node" aria-label="Delete">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="centerPane">
+            <div id="textareaContainer">
+                <textarea id="promptText" rows="12" cols="50" placeholder="Start typing..."></textarea>
+                <div id="hoverPreview"></div>
+                <textarea id="textMeasure" aria-hidden="true"></textarea>
+            </div>
+        </div>
+        <div id="rightPane">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="modelSelect">Model</label>
+                    <select id="modelSelect">
+                        <option value="sshleifer/tiny-gpt2">sshleifer/tiny-gpt2</option>
+                        <option value="gpt2">gpt2</option>
+                        <option value="gpt2-medium">gpt2-medium</option>
+                        <option value="gpt2-large">gpt2-large</option>
+                        <option value="gpt2-xl">gpt2-xl</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="lengthRange">Length</label>
+                    <div class="slider-line">
+                        <input type="range" id="lengthRange" min="10" max="200" value="100">
+                        <span id="lengthValue">100</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="tempRange">Temp</label>
+                    <div class="slider-line">
+                        <input type="range" id="tempRange" min="0.1" max="1.5" step="0.1" value="0.8">
+                        <span id="tempValue">0.8</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="variantRange">Variants</label>
+                    <div class="slider-line">
+                        <input type="range" id="variantRange" min="1" max="10" value="3">
+                        <span id="variantValue">3</span>
+                    </div>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="generateBtn">Weave</button>
+            </div>
+        </div>
+    </main>
+    <div id="confirmDeleteModal" class="modal hidden">
+        <div class="modal-box">
+            <p id="confirmDeleteText">Delete this node and all its children?</p>
+            <div class="modal-buttons">
+                <button id="confirmDelete">Delete</button>
+                <button id="cancelDelete">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <script>
+    let nodes = {{ (tree or [{'id':0, 'text':'', 'parent': None}]) | tojson }};
+    let nextId = Math.max(...nodes.map(n => n.id)) + 1;
+    let currentNodeId = {{ selected_id if selected_id is not none else 0 }};
+    let treeId = {{ tree_id or 'null' }};
+    const savedLength = {{ length if length is not none else 100 }};
+    const savedTemp = {{ temperature if temperature is not none else 0.8 }};
+    const savedModel = {{ (model_name|tojson) if model_name else '"sshleifer/tiny-gpt2"' }};
+    const savedVariants = {{ variants if variants is not none else 3 }};
+    const variantRange = document.getElementById('variantRange');
+    const variantValue = document.getElementById('variantValue');
+    variantRange.value = savedVariants;
+    variantValue.textContent = savedVariants;
+    let NUM_CHILDREN = parseInt(savedVariants);
+    const modelSelect = document.getElementById('modelSelect');
+    modelSelect.value = savedModel;
+    const generateBtn = document.getElementById('generateBtn');
+    let loading = false;
+    let activeGenerations = 0;
+    const generatingNodes = new Set();
+    let previewNodeId = null;
+    const textarea = document.getElementById('promptText');
+    const textMeasure = document.getElementById('textMeasure');
+    const graphWrapper = document.getElementById('graphWrapper');
+    const graphScroll = document.getElementById('graphScroll');
+    const graphCanvas = document.getElementById('graphCanvas');
+    const treeLink = document.getElementById('treeLink');
+    const historyLink = document.getElementById('historyLink');
+
+    function updateLinks() {
+        treeLink.href = `/tree?tree_id=${treeId}&node_id=${currentNodeId}`;
+        historyLink.href = `/history?current_id=${treeId}&node_id=${currentNodeId}`;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (document.activeElement !== textarea && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            textarea.focus();
+            const pos = textarea.value.length;
+            textarea.setSelectionRange(pos, pos);
+        }
+    });
+
+    function updateMinHeight() {
+        textMeasure.value = nodes.reduce((m, n) => n.text.length > m.length ? n.text : m, '');
+        textarea.style.minHeight = textMeasure.scrollHeight + 'px';
+    }
+
+    function autoResize() {
+        textarea.style.height = 'auto';
+        const h = Math.max(textMeasure.scrollHeight, textarea.scrollHeight);
+        textarea.style.height = h + 'px';
+    }
+
+    function syncGraphScroll() {
+        const docMax = document.documentElement.scrollHeight - window.innerHeight;
+        const ratio = docMax > 0 ? window.scrollY / docMax : 0;
+        const maxOffset = Math.max(0, graphCanvas.height - graphWrapper.clientHeight);
+        graphScroll.style.transform = `translateY(-${ratio * maxOffset}px)`;
+    }
+    const lengthRange = document.getElementById('lengthRange');
+    const lengthValue = document.getElementById('lengthValue');
+    lengthRange.value = savedLength;
+    lengthValue.textContent = savedLength;
+    const tempRange = document.getElementById('tempRange');
+    const tempValue = document.getElementById('tempValue');
+    tempRange.value = savedTemp;
+    tempValue.textContent = savedTemp;
+
+    function startPulse() {
+        generateBtn.classList.add('pulsing');
+    }
+
+    function stopPulse() {
+        generateBtn.classList.remove('pulsing');
+    }
+
+    function toggleGenerateButton() {
+        if (textarea.value.trim()) {
+            generateBtn.style.display = 'inline-block';
+            requestAnimationFrame(() => generateBtn.classList.add('visible'));
+        } else {
+            generateBtn.classList.remove('visible');
+            setTimeout(() => {
+                if (!generateBtn.classList.contains('visible')) {
+                    generateBtn.style.display = 'none';
+                }
+            }, 300);
+        }
+        if (generatingNodes.has(currentNodeId)) {
+            generateBtn.disabled = true;
+        } else {
+            generateBtn.disabled = false;
+        }
+    }
+
+    lengthRange.oninput = () => {
+        lengthValue.textContent = lengthRange.value;
+    };
+    tempRange.oninput = () => {
+        tempValue.textContent = tempRange.value;
+    };
+    variantRange.oninput = () => {
+        variantValue.textContent = variantRange.value;
+        NUM_CHILDREN = parseInt(variantRange.value);
+    };
+    async function applyModel(name) {
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Loading...';
+        const resp = await fetch('/set_model', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({model: name})
+        });
+        const data = await resp.json();
+        if (data.status === 'loading') {
+            loading = true;
+            const check = setInterval(async () => {
+                const r = await fetch('/model_status');
+                const s = await r.json();
+                if (!s.loading) {
+                    clearInterval(check);
+                    loading = false;
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'Weave';
+                }
+            }, 1000);
+        } else {
+            generateBtn.disabled = false;
+            generateBtn.textContent = 'Weave';
+        }
+    }
+
+    modelSelect.onchange = () => {
+        applyModel(modelSelect.value);
+    };
+
+
+    let graphPositions = {};
+
+    function getPath(id) {
+        const byId = {};
+        for (const n of nodes) {
+            byId[n.id] = n;
+        }
+        const path = [];
+        let cur = byId[id];
+        while (cur) {
+            path.unshift(cur.id);
+            if (cur.parent === null) break;
+            cur = byId[cur.parent];
+        }
+        return path;
+    }
+
+    function drawGraph() {
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        graphPositions = {};
+        const levels = [];
+        function assign(id, depth) {
+            if (!levels[depth]) levels[depth] = [];
+            levels[depth].push(id);
+            for (const child of nodes.filter(n => n.parent === id)) {
+                assign(child.id, depth + 1);
+            }
+        }
+        assign(0, 0);
+        const levelHeight = 60;
+        const width = canvas.width;
+        const height = (levels.length + 1) * levelHeight;
+        canvas.height = height;
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        for (let d = 0; d < levels.length; d++) {
+            const spacing = width / (levels[d].length + 1);
+            for (let i = 0; i < levels[d].length; i++) {
+                const id = levels[d][i];
+                const x = spacing * (i + 1);
+                const y = 20 + d * levelHeight;
+                graphPositions[id] = { x, y };
+            }
+        }
+        const path = getPath(currentNodeId);
+        const pathEdges = new Set();
+        for (let i = 1; i < path.length; i++) {
+            pathEdges.add(path[i-1] + '-' + path[i]);
+        }
+        const pathNodes = new Set(path);
+        for (const n of nodes) {
+            if (n.parent !== null && graphPositions[n.parent]) {
+                const p = graphPositions[n.parent];
+                const c = graphPositions[n.id];
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(c.x, c.y);
+                if (pathEdges.has(n.parent + '-' + n.id)) {
+                    ctx.strokeStyle = '#b0f';
+                    ctx.lineWidth = 2;
+                } else {
+                    ctx.strokeStyle = '#555';
+                    ctx.lineWidth = 1;
+                }
+                ctx.stroke();
+            }
+        }
+        const overlay = document.getElementById('nodeOverlay');
+        overlay.style.width = width + 'px';
+        overlay.style.height = height + 'px';
+        const seen = new Set();
+        for (const id in graphPositions) {
+            const pos = graphPositions[id];
+            let div = overlay.querySelector(`[data-node-id="${id}"]`);
+            if (!div) {
+                div = document.createElement('div');
+                div.className = 'graph-node';
+                div.dataset.nodeId = id;
+                div.onclick = () => selectNode(parseInt(id));
+                div.onmouseenter = () => showPreview(parseInt(id));
+                div.onmouseleave = hidePreview;
+                overlay.appendChild(div);
+            } else {
+                div.onmouseenter = () => showPreview(parseInt(id));
+                div.onmouseleave = hidePreview;
+            }
+            div.style.left = pos.x + 'px';
+            div.style.top = pos.y + 'px';
+            if (parseInt(id) === currentNodeId) div.classList.add('current');
+            else div.classList.remove('current');
+            if (pathNodes.has(parseInt(id))) div.classList.add('path');
+            else div.classList.remove('path');
+            if (generatingNodes.has(parseInt(id))) div.classList.add('pulsing');
+            else div.classList.remove('pulsing');
+            seen.add(id);
+        }
+        overlay.querySelectorAll('.graph-node').forEach(div => {
+            if (!seen.has(div.dataset.nodeId)) div.remove();
+        });
+        syncGraphScroll();
+    }
+
+    const hoverPreview = document.getElementById('hoverPreview');
+
+    function escHtml(str) {
+        return str.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    }
+
+    function commonAncestorText(aId, bId) {
+        const pathA = getPath(aId);
+        const pathB = getPath(bId);
+        let i = 0;
+        while (i < pathA.length && i < pathB.length && pathA[i] === pathB[i]) {
+            i++;
+        }
+        const ancestorId = pathA[i - 1];
+        const anc = nodes.find(n => n.id === ancestorId);
+        return anc ? anc.text : '';
+    }
+
+    function updatePreview() {
+        if (previewNodeId === null || previewNodeId === currentNodeId) return;
+        const node = nodes.find(n => n.id === previewNodeId);
+        const current = nodes.find(n => n.id === currentNodeId);
+        if (!node || !current) return;
+        const ancestorText = commonAncestorText(currentNodeId, previewNodeId);
+        const path = getPath(previewNodeId);
+        const isDescendant = path.includes(currentNodeId);
+        textarea.classList.add('hide-selected');
+        if (!isDescendant) {
+            const diff = node.text.slice(ancestorText.length);
+            hoverPreview.innerHTML = `<span class="common">${escHtml(ancestorText)}</span><span>${escHtml(diff)}</span>`;
+        } else {
+            const diff = node.text.slice(current.text.length);
+            hoverPreview.innerHTML = `<span class="hidden-base">${escHtml(current.text)}</span><span>${escHtml(diff)}</span>`;
+        }
+        hoverPreview.style.display = 'block';
+    }
+
+    function showPreview(id) {
+        previewNodeId = id;
+        updatePreview();
+    }
+
+    function hidePreview() {
+        previewNodeId = null;
+        hoverPreview.style.display = 'none';
+        hoverPreview.innerHTML = '';
+        textarea.classList.remove('hide-selected');
+    }
+
+    function selectNode(id) {
+        hidePreview();
+        currentNodeId = id;
+        textarea.value = nodes.find(n=>n.id===id).text;
+        updateMinHeight();
+        autoResize();
+        toggleGenerateButton();
+        drawGraph();
+        updateLinks();
+    }
+
+    function findBranchNode(text) {
+        let best = 0;
+        for (const n of nodes) {
+            if (text.startsWith(n.text) && n.text.length > nodes.find(b=>b.id===best).text.length) {
+                best = n.id;
+            }
+        }
+        return best;
+    }
+
+    async function generate() {
+        if (loading) {
+            return;
+        }
+        startPulse();
+        activeGenerations = NUM_CHILDREN;
+        const text = textarea.value;
+        let branchId = findBranchNode(text);
+        if (text !== nodes.find(n=>n.id===branchId).text) {
+            const newId = nextId++;
+            nodes.push({id:newId, text:text, parent:branchId});
+            updateMinHeight();
+            branchId = newId;
+            await saveTree();
+        }
+        currentNodeId = branchId;
+        let firstChildId = null;
+        for (let i = 0; i < NUM_CHILDREN; i++) {
+            const childId = nextId++;
+            if (firstChildId === null) firstChildId = childId;
+            nodes.push({id: childId, text: text, parent: branchId, model: modelSelect.value});
+            generatingNodes.add(childId);
+            drawGraph();
+            const es = new EventSource(`/generate_stream?prompt=${encodeURIComponent(text)}&max_new_tokens=${lengthRange.value}&temperature=${tempRange.value}`);
+            es.onmessage = (e) => {
+                if (e.data === '[DONE]') {
+                    es.close();
+                    generatingNodes.delete(childId);
+                    saveTree();
+                    if (--activeGenerations === 0) {
+                        stopPulse();
+                    }
+                    drawGraph();
+                    toggleGenerateButton();
+                    return;
+                }
+                const data = JSON.parse(e.data);
+                const node = nodes.find(n => n.id === childId);
+                node.text += data.token;
+                updateMinHeight();
+                if (childId === currentNodeId) {
+                    textarea.value = node.text;
+                    autoResize();
+                }
+                if (previewNodeId === childId && previewNodeId !== currentNodeId) {
+                    updatePreview();
+                }
+                drawGraph();
+            };
+        }
+        if (firstChildId !== null) {
+            selectNode(firstChildId);
+        }
+    }
+
+    async function saveTree() {
+        const resp = await fetch('/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                tree_id: treeId,
+                tree: nodes,
+                length: parseInt(lengthRange.value),
+                temperature: parseFloat(tempRange.value),
+                model: modelSelect.value,
+                variants: parseInt(variantRange.value)
+            })
+        });
+        const data = await resp.json();
+        if (data.id !== undefined) {
+            treeId = data.id;
+        }
+    }
+
+    async function createNewTree() {
+        const resp = await fetch('/new_tree', {method: 'POST'});
+        const data = await resp.json();
+        window.location.href = `/?tree_id=${data.id}`;
+    }
+
+    function deleteNodeConfirmed() {
+        const parentId = nodes.find(n => n.id === currentNodeId).parent;
+        const toDelete = new Set();
+        function gather(id) {
+            toDelete.add(id);
+            for (const child of nodes.filter(n => n.parent === id)) {
+                gather(child.id);
+            }
+        }
+        gather(currentNodeId);
+        nodes = nodes.filter(n => !toDelete.has(n.id));
+        currentNodeId = parentId;
+        textarea.value = nodes.find(n => n.id === currentNodeId).text;
+        updateMinHeight();
+        autoResize();
+        toggleGenerateButton();
+        drawGraph();
+        updateLinks();
+        saveTree();
+    }
+
+    function deleteNode() {
+        if (currentNodeId === 0) {
+            alert('Cannot delete the root node.');
+            return;
+        }
+        const hasChildren = nodes.some(n => n.parent === currentNodeId);
+        document.getElementById('confirmDeleteText').textContent =
+            hasChildren ?
+            'Delete this node and all its children?' :
+            'Delete this node?';
+        document.getElementById('confirmDeleteModal').classList.remove('hidden');
+    }
+
+    document.getElementById('generateBtn').onclick = generate;
+    document.getElementById('newTreeBtn').onclick = (e) => { e.preventDefault(); createNewTree(); };
+    document.getElementById('deleteBtn').onclick = deleteNode;
+    document.getElementById('confirmDelete').onclick = () => {
+        document.getElementById('confirmDeleteModal').classList.add('hidden');
+        deleteNodeConfirmed();
+    };
+    document.getElementById('cancelDelete').onclick = () => {
+        document.getElementById('confirmDeleteModal').classList.add('hidden');
+    };
+    textarea.addEventListener('input', () => {
+        updateMinHeight();
+        autoResize();
+        toggleGenerateButton();
+    });
+    textarea.value = nodes.find(n => n.id === currentNodeId).text;
+    updateMinHeight();
+    autoResize();
+    toggleGenerateButton();
+    drawGraph();
+    updateLinks();
+    window.addEventListener('scroll', syncGraphScroll);
+    syncGraphScroll();
+    applyModel(savedModel);
+    </script>
+</body>
+</html>

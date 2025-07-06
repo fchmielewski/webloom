@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+    <title>History</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <pre class="ascii-title">
+__        __   _     _
+\ \      / /__| |__ | |    ___   ___  _ __ ___
+ \ \ /\ / / _ \ '_ \| |   / _ \ / _ \| '_ ` _ \
+  \ V  V /  __/ |_) | |__| (_) | (_) | | | | | |
+   \_/\_/ \___|_.__/|_____\___/ \___/|_| |_| |_|
+        </pre>
+        <nav>
+            <a href="{{ url_for('index', tree_id=current_id, node_id=node_id) if current_id else url_for('index', node_id=node_id) }}">Back</a>
+        </nav>
+    </header>
+    <main class="history-main">
+    <ul class="history-list">
+        {% for record in records %}
+        <li data-id="{{ record.id }}">
+            <a class="history-entry" href="{{ url_for('index') }}?tree_id={{ record.id }}">
+                <span class="history-date">{{ record.timestamp }}</span>
+                <span class="history-preview">{{ record.preview }}</span>
+            </a>
+            <span class="history-buttons">
+                <button class="dup-btn" title="Duplicate" aria-label="Duplicate" data-id="{{ record.id }}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
+                    </svg>
+                </button>
+                <button class="del-btn" title="Delete" aria-label="Delete" data-id="{{ record.id }}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                </button>
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+    </main>
+    <div id="confirmDeleteModal" class="modal hidden">
+        <div class="modal-box">
+            <p>Delete this tree?</p>
+            <div class="modal-buttons">
+                <button id="confirmDelete">Delete</button>
+                <button id="cancelDelete">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <script>
+    let pendingDelete = null;
+    document.querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            pendingDelete = btn.dataset.id;
+            document.getElementById('confirmDeleteModal').classList.remove('hidden');
+        });
+    });
+    document.getElementById('confirmDelete').onclick = async () => {
+        if (pendingDelete) {
+            const li = document.querySelector(`li[data-id="${pendingDelete}"]`);
+            await fetch(`/delete_tree/${pendingDelete}`, {method: 'POST'});
+            document.getElementById('confirmDeleteModal').classList.add('hidden');
+            if (li) {
+                li.style.height = li.offsetHeight + 'px';
+                requestAnimationFrame(() => {
+                    li.classList.add('removing');
+                    li.style.height = '0px';
+                    li.addEventListener('transitionend', () => li.remove(), {once: true});
+                });
+            }
+            pendingDelete = null;
+        }
+    };
+    document.getElementById('cancelDelete').onclick = () => {
+        document.getElementById('confirmDeleteModal').classList.add('hidden');
+        pendingDelete = null;
+    };
+    document.querySelectorAll('.dup-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            const resp = await fetch(`/duplicate_tree/${id}`, {method: 'POST'});
+            const data = await resp.json();
+            if (data.id) {
+                window.location.href = `/?tree_id=${data.id}`;
+            }
+        });
+    });
+    </script>
+</body>
+</html>
+
