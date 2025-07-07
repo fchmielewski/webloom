@@ -361,7 +361,7 @@ __        __   _     _
             hoverPreview.innerHTML = `<span class="common">${escHtml(ancestorText)}</span><span>${escHtml(diff)}</span>`;
         } else {
             const diff = node.text.slice(current.text.length);
-            hoverPreview.innerHTML = `<span class="hidden-base">${escHtml(current.text)}</span><span>${escHtml(diff)}</span>`;
+            hoverPreview.innerHTML = `<span class="common">${escHtml(current.text)}</span><span>${escHtml(diff)}</span>`;
         }
         hoverPreview.style.display = 'block';
     }

@@ -1,0 +1,5 @@
+loom.db
+loom/__pycache__/__init__.cpython-312.pyc
+loom/__pycache__/database.cpython-312.pyc
+loom/__pycache__/model.cpython-312.pyc
+loom/__pycache__/web.cpython-312.pyc
