@@ -20,6 +20,20 @@ class LoomModel:
         # backend.
         if device is None:
             device = os.getenv("LOOM_DEVICE")
+
+        # Validate and fall back to CPU if the requested device is unavailable.
+        if device in {"cuda", "cuda:0", "gpu"}:
+            if not torch.cuda.is_available():
+                device = "cpu"
+            else:
+                device = "cuda"
+        elif device == "mps":
+            if not (getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()):
+                device = "cpu"
+        elif device not in {None, "cpu"}:
+            # Unknown device string
+            device = "cpu"
+        
         if device is None:
             if torch.cuda.is_available():
                 device = "cuda"
@@ -27,6 +41,7 @@ class LoomModel:
                 device = "mps"
             else:
                 device = "cpu"
+                
         self.device = device
         self.tokenizer = GPT2Tokenizer.from_pretrained(model_name)
         # Truncate long prompts from the beginning to fit the model context

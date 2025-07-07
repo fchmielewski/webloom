@@ -13,3 +13,10 @@ def test_generate_returns_strings():
     res = model.generate('Hello', max_new_tokens=1, num_return_sequences=2)
     assert len(res) == 2
     assert all(isinstance(r, str) for r in res)
+
+
+def test_unavailable_env_device_falls_back_to_cpu(monkeypatch):
+    monkeypatch.setenv('LOOM_DEVICE', 'cuda')
+    monkeypatch.setattr('torch.cuda.is_available', lambda: False)
+    model = LoomModel('sshleifer/tiny-gpt2')
+    assert model.device == 'cpu'
